@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #ffffff;
+    --foreground: #0a0a0a;
+    
+    --color-primary: #d32f2f;
+    --color-primary-light: #ffebee;
+    --color-primary-hover: #b71c1c;
+
+    --color-navy: #0a0a0a;
+    --color-navy-light: #2d2d2d;
+
+    --color-success: #00c851;
+    --color-border: #e0e0e0;
+  }
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #f5f5f5;
+  --color-primary: #d32f2f;
+  --color-navy: #ffffff; 
+}
