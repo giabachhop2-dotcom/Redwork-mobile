@@ -1,12 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ["./app/**/*.{js,jsx,ts,tsx}", "./components/**/*.{js,jsx,ts,tsx}"],
-  presets: [require("nativewind/preset")],
   theme: {
     extend: {
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
         primary: {
           DEFAULT: "#FF4444",
           hover: "#E03333",
@@ -20,9 +17,6 @@ module.exports = {
           light: "#F8F9FA",
           dark: "#212529",
         },
-      },
-      fontFamily: {
-        sans: ["System"], // Use system font for now
       },
     },
   },
