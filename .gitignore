@@ -33,6 +33,8 @@ yarn-error.*
 # local env files
 .env
 .env*.local
+
+# secrets
 credentials.json
 deploy_key
 deploy_key.pub

@@ -1,24 +1,26 @@
-import { useEffect } from 'react';
-import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Redirect } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
-import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '../utils/supabase';
 
 export default function Index() {
-  const { session, loading } = useAuth();
-  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    if (loading) return;
-    if (session) {
-      router.replace('/(tabs)');
-    } else {
-      router.replace('/login');
-    }
-  }, [session, loading]);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsLoggedIn(!!session);
+      setLoading(false);
+    });
+  }, []);
 
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
-      <ActivityIndicator size="large" color="#FF4444" />
-    </View>
-  );
+  if (loading) {
+    return (
+      <View className="flex-1 justify-center items-center bg-white dark:bg-black">
+        <ActivityIndicator size="large" color="#FF4444" />
+      </View>
+    );
+  }
+
+  return <Redirect href={isLoggedIn ? '/(tabs)' : '/login'} />;
 }

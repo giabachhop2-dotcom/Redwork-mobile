@@ -1,8 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View, Text, RefreshControl, TouchableOpacity,
-  Platform, StyleSheet, TextInput, ScrollView,
-} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, RefreshControl, TouchableOpacity } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { JobCard } from '@/components/JobCard';
@@ -10,305 +7,90 @@ import { JobCardSkeleton } from '@/components/JobCardSkeleton';
 import { Job } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { supabase } from '@/utils/supabase';
-import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-
-const CATEGORIES = ['All', '🖥 Tech', '🎨 Design', '📊 Marketing', '🌍 Remote', '💼 Finance', '📱 Mobile'];
-const PAGE_SIZE = 20;
+import { supabase } from '../../utils/supabase';
 
 export default function JobFeedScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const router = useRouter();
-
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [featuredJobs, setFeaturedJobs] = useState<Job[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
 
-  const fetchJobs = useCallback(async (pageNum = 0, isRefresh = false) => {
+  const fetchJobs = async () => {
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('jobs')
-        .select('*')
-        .eq('status', 'approved')
+        .select('id, title, company, location, type, description, category, budget_min, budget_max, hourly_rate_min, hourly_rate_max, created_at, is_sponsored, status')
+        .eq('status', 'open')
         .order('created_at', { ascending: false })
-        .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
+        .limit(20);
 
-      if (selectedCategory !== 'All') {
-        const cat = selectedCategory.replace(/^[^\w]+\s/, '');
-        query = query.ilike('category', `%${cat}%`);
+      if (data && !error) {
+        setJobs(data as Job[]);
       }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      if (isRefresh || pageNum === 0) {
-        setJobs(data || []);
-      } else {
-        setJobs(prev => [...prev, ...(data || [])]);
-      }
-      setHasMore((data?.length || 0) === PAGE_SIZE);
     } catch (e) {
-      console.error('Failed to fetch jobs:', e);
-    }
-  }, [selectedCategory]);
-
-  const fetchFeatured = useCallback(async () => {
-    try {
-      const { data } = await supabase
-        .from('jobs')
-        .select('*')
-        .eq('status', 'approved')
-        .eq('is_featured', true)
-        .order('created_at', { ascending: false })
-        .limit(5);
-      setFeaturedJobs(data || []);
-    } catch (e) {
-      console.error('Failed to fetch featured:', e);
-    }
-  }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setPage(0);
-      await Promise.all([fetchJobs(0, true), fetchFeatured()]);
+      console.warn('Failed to fetch jobs:', e);
+    } finally {
       setLoading(false);
-    };
-    load();
-  }, [selectedCategory]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPage(0);
-    await Promise.all([fetchJobs(0, true), fetchFeatured()]);
-    setRefreshing(false);
-  }, [fetchJobs, fetchFeatured]);
-
-  const onEndReached = useCallback(async () => {
-    if (!hasMore || loading) return;
-    const nextPage = page + 1;
-    setPage(nextPage);
-    await fetchJobs(nextPage);
-  }, [page, hasMore, loading, fetchJobs]);
-
-  const getTimeAgo = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    if (days < 30) return `${days}d ago`;
-    return `${Math.floor(days / 30)}mo ago`;
+      setRefreshing(false);
+    }
   };
 
-  const HeaderComponent = () => (
-    <View>
-      {/* Featured Jobs */}
-      {featuredJobs.length > 0 && (
-        <View style={{ marginBottom: 16 }}>
-          <Text style={{
-            fontSize: 18, fontWeight: '700',
-            color: isDark ? '#FFF' : '#000',
-            paddingHorizontal: 20, marginBottom: 12,
-          }}>
-            ⭐ Featured
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16 }}
-          >
-            {featuredJobs.map((job, i) => (
-              <TouchableOpacity
-                key={job.id}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  router.push(`/job/${job.id}`);
-                }}
-                activeOpacity={0.8}
-                style={{
-                  width: 280,
-                  backgroundColor: isDark ? '#1C1C1E' : '#FFF',
-                  borderRadius: 20,
-                  padding: 20,
-                  marginRight: 12,
-                  borderWidth: 1,
-                  borderColor: isDark ? '#2C2C2E' : '#F0F0F0',
-                  shadowColor: '#FF4444',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 12,
-                }}
-              >
-                <View style={{
-                  backgroundColor: '#FF4444',
-                  paddingHorizontal: 10, paddingVertical: 4,
-                  borderRadius: 8, alignSelf: 'flex-start',
-                  marginBottom: 12,
-                }}>
-                  <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '700' }}>FEATURED</Text>
-                </View>
-                <Text style={{
-                  fontSize: 17, fontWeight: '700',
-                  color: isDark ? '#FFF' : '#1A1A1A',
-                  marginBottom: 6,
-                }} numberOfLines={2}>
-                  {job.title}
-                </Text>
-                <Text style={{ fontSize: 14, color: '#9CA3AF', marginBottom: 12 }}>
-                  {job.company}
-                </Text>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <View style={{
-                    backgroundColor: isDark ? '#2C2C2E' : '#F3F4F6',
-                    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
-                  }}>
-                    <Text style={{ fontSize: 12, color: isDark ? '#D1D5DB' : '#6B7280' }}>
-                      {job.location || 'Remote'}
-                    </Text>
-                  </View>
-                  {job.budget_max && (
-                    <View style={{
-                      backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                      paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
-                    }}>
-                      <Text style={{ fontSize: 12, color: '#10B981', fontWeight: '600' }}>
-                        ${job.budget_min}-${job.budget_max}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
+  useEffect(() => {
+    fetchJobs();
+  }, []);
 
-      {/* Section Title */}
-      <Text style={{
-        fontSize: 18, fontWeight: '700',
-        color: isDark ? '#FFF' : '#000',
-        paddingHorizontal: 20, marginBottom: 8,
-      }}>
-        Recent Jobs
-      </Text>
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchJobs();
+  };
+
+  const EmptyState = () => (
+    <View className="flex-1 justify-center items-center py-20">
+      <Ionicons name="briefcase-outline" size={64} color="#D1D5DB" />
+      <Text className="text-xl font-bold text-gray-400 mt-4">No Jobs Found</Text>
+      <Text className="text-gray-400 mt-2 text-center px-8">Pull down to refresh or check back later for new opportunities.</Text>
     </View>
   );
 
-  return (
-    <View style={{ flex: 1, backgroundColor: isDark ? '#000' : '#F2F2F7' }}>
-      {/* Sticky Header */}
-      <View style={{
-        paddingTop: Platform.OS === 'ios' ? 60 : 40,
-        paddingBottom: 12,
-        paddingHorizontal: 20,
-        backgroundColor: isDark ? 'rgba(0,0,0,0.95)' : 'rgba(242,242,247,0.95)',
-        zIndex: 10,
-      }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <View>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 1.5 }}>
-              Discover
-            </Text>
-            <Text style={{ fontSize: 32, fontWeight: '800', color: isDark ? '#FFF' : '#000', letterSpacing: -0.5 }}>
-              Jobs
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={{
-              width: 40, height: 40, borderRadius: 20,
-              backgroundColor: isDark ? '#1C1C1E' : '#FFF',
-              justifyContent: 'center', alignItems: 'center',
-              borderWidth: 1, borderColor: isDark ? '#2C2C2E' : '#E5E5EA',
-            }}
-          >
-            <Ionicons name="notifications-outline" size={22} color={isDark ? '#FFF' : '#000'} />
-          </TouchableOpacity>
+  const Header = () => (
+    <BlurView intensity={80} tint="light" className="absolute top-0 left-0 right-0 z-10 px-6 pt-14 pb-4 overflow-hidden border-b border-gray-200/50 dark:border-gray-800/50">
+      <View className="flex-row justify-between items-center mb-4">
+        <View>
+          <Text className="text-sm font-medium text-gray-500 uppercase tracking-widest">Discover</Text>
+          <Text className="text-3xl font-extrabold text-navy dark:text-white tracking-tight">Jobs</Text>
         </View>
-
-        {/* Category Chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8 }}
-        >
-          {CATEGORIES.map(cat => {
-            const isActive = selectedCategory === cat;
-            return (
-              <TouchableOpacity
-                key={cat}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setSelectedCategory(cat);
-                }}
-                style={{
-                  paddingHorizontal: 16, paddingVertical: 8,
-                  borderRadius: 20,
-                  backgroundColor: isActive ? '#FF4444' : (isDark ? '#1C1C1E' : '#FFF'),
-                  borderWidth: isActive ? 0 : 1,
-                  borderColor: isDark ? '#2C2C2E' : '#E5E5EA',
-                }}
-              >
-                <Text style={{
-                  fontSize: 13, fontWeight: '600',
-                  color: isActive ? '#FFF' : (isDark ? '#D1D5DB' : '#6B7280'),
-                }}>
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        <TouchableOpacity className="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded-full items-center justify-center">
+          <Ionicons name="notifications-outline" size={24} color="#333" />
+        </TouchableOpacity>
       </View>
+      <View className="flex-row items-center bg-gray-100/80 dark:bg-gray-800/80 rounded-xl px-4 py-3">
+        <Ionicons name="search" size={20} color="#9CA3AF" />
+        <Text className="ml-2 text-gray-400">Search for jobs, skills...</Text>
+      </View>
+    </BlurView>
+  );
 
-      {/* Job List */}
+  return (
+    <View className="flex-1 bg-white dark:bg-black">
+      <Header />
       {loading ? (
-        <View style={{ paddingTop: 16, paddingHorizontal: 4 }}>
-          {[0, 1, 2, 3].map(i => <JobCardSkeleton key={i} />)}
+        <View className="mt-32 px-4">
+          <JobCardSkeleton />
+          <JobCardSkeleton />
+          <JobCardSkeleton />
         </View>
       ) : jobs.length === 0 ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 }}>
-          <Ionicons name="search-outline" size={64} color="#9CA3AF" />
-          <Text style={{ fontSize: 20, fontWeight: '700', color: isDark ? '#FFF' : '#000', marginTop: 16 }}>
-            No jobs found
-          </Text>
-          <Text style={{ fontSize: 15, color: '#9CA3AF', textAlign: 'center', marginTop: 8 }}>
-            Try a different category or pull down to refresh.
-          </Text>
+        <View className="mt-32">
+          <EmptyState />
         </View>
       ) : (
         <FlashList
           data={jobs}
-          renderItem={({ item, index }) => (
-            <Animated.View entering={FadeInDown.delay(index * 50).springify()}>
-              <JobCard
-                job={item}
-                timeAgo={getTimeAgo(item.created_at)}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  router.push(`/job/${item.id}`);
-                }}
-              />
-            </Animated.View>
-          )}
-          estimatedItemSize={160}
-          ListHeaderComponent={HeaderComponent}
-          contentContainerStyle={{ paddingBottom: 100, paddingTop: 8 }}
+          renderItem={({ item }) => <JobCard job={item} onPress={() => {}} />}
+          estimatedItemSize={150}
+          contentContainerStyle={{ paddingTop: 140, paddingBottom: 100 }}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF4444" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF4444" progressViewOffset={140} />
           }
-          onEndReached={onEndReached}
-          onEndReachedThreshold={0.3}
           showsVerticalScrollIndicator={false}
         />
       )}
