@@ -36,10 +36,15 @@ export default function LoginScreen() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    setLoading(false);
-    if (error) Alert.alert('Error', error.message);
-    else router.replace('/(tabs)');
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      setLoading(false);
+      if (error) Alert.alert('Error', error.message);
+      else router.replace('/(tabs)');
+    } catch (e: any) {
+      setLoading(false);
+      Alert.alert('Connection Error', 'Unable to connect to the server. Please check your internet connection and try again.');
+    }
   };
 
   const handleSignUp = async () => {
