@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, Image, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -60,39 +60,35 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 justify-center items-center bg-white dark:bg-black">
-        <Text className="text-gray-400">Loading...</Text>
+      <View style={s.loadingContainer}>
+        <Text style={s.loadingText}>Loading...</Text>
       </View>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-black">
-      <ScrollView className="flex-1 px-6" showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={s.container}>
+      <ScrollView style={s.scrollView} showsVerticalScrollIndicator={false}>
         {/* Header */}
-        <View className="items-center mt-8 mb-6">
-          <View className="w-24 h-24 bg-primary/10 rounded-full items-center justify-center mb-4">
+        <View style={s.profileHeader}>
+          <View style={s.avatarContainer}>
             {profile?.avatar_url ? (
-              <Image source={{ uri: profile.avatar_url }} className="w-24 h-24 rounded-full" />
+              <Image source={{ uri: profile.avatar_url }} style={s.avatar} />
             ) : (
               <Ionicons name="person" size={48} color="#FF4444" />
             )}
           </View>
-          <Text className="text-2xl font-bold text-navy dark:text-white">
-            {profile?.full_name || 'No Name Set'}
-          </Text>
-          <Text className="text-gray-500 mt-1">{profile?.title || 'No title'}</Text>
-          <View className="flex-row items-center mt-2">
-            <View className="bg-primary/10 px-3 py-1 rounded-full">
-              <Text className="text-primary font-semibold text-sm capitalize">
-                {profile?.role || 'talent'}
-              </Text>
+          <Text style={s.userName}>{profile?.full_name || 'No Name Set'}</Text>
+          <Text style={s.userTitle}>{profile?.title || 'No title'}</Text>
+          <View style={s.roleBadgeRow}>
+            <View style={s.roleBadge}>
+              <Text style={s.roleBadgeText}>{profile?.role || 'talent'}</Text>
             </View>
           </View>
         </View>
 
         {/* Info Cards */}
-        <View className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-5 mb-4">
+        <View style={s.infoCard}>
           <ProfileRow icon="mail-outline" label="Email" value={profile?.email || '-'} />
           <ProfileRow icon="location-outline" label="Location" value={profile?.location || 'Not set'} />
           {profile?.company_name && (
@@ -102,12 +98,12 @@ export default function ProfileScreen() {
 
         {/* Skills */}
         {profile?.skills && profile.skills.length > 0 && (
-          <View className="mb-4">
-            <Text className="text-lg font-bold text-navy dark:text-white mb-3">Skills</Text>
-            <View className="flex-row flex-wrap gap-2">
+          <View style={s.skillsSection}>
+            <Text style={s.skillsTitle}>Skills</Text>
+            <View style={s.skillsRow}>
               {profile.skills.map((skill, i) => (
-                <View key={i} className="bg-primary/10 px-3 py-1.5 rounded-full">
-                  <Text className="text-primary font-medium text-sm">{skill}</Text>
+                <View key={i} style={s.skillBadge}>
+                  <Text style={s.skillText}>{skill}</Text>
                 </View>
               ))}
             </View>
@@ -115,14 +111,9 @@ export default function ProfileScreen() {
         )}
 
         {/* Actions */}
-        <TouchableOpacity
-          onPress={handleSignOut}
-          className="bg-red-50 dark:bg-red-900/20 py-4 rounded-2xl items-center mt-4 mb-10"
-        >
-          <View className="flex-row items-center gap-2">
-            <Ionicons name="log-out-outline" size={22} color="#EF4444" />
-            <Text className="text-red-500 font-bold text-base">Sign Out</Text>
-          </View>
+        <TouchableOpacity onPress={handleSignOut} style={s.signOutBtn} activeOpacity={0.7}>
+          <Ionicons name="log-out-outline" size={22} color="#EF4444" />
+          <Text style={s.signOutText}>Sign Out</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -131,10 +122,50 @@ export default function ProfileScreen() {
 
 function ProfileRow({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
-    <View className="flex-row items-center py-3 border-b border-gray-200/50 dark:border-gray-800/50 last:border-0">
+    <View style={s.infoRow}>
       <Ionicons name={icon as any} size={20} color="#9CA3AF" />
-      <Text className="text-gray-500 ml-3 w-20">{label}</Text>
-      <Text className="text-navy dark:text-white font-medium flex-1 text-right">{value}</Text>
+      <Text style={s.infoLabel}>{label}</Text>
+      <Text style={s.infoValue}>{value}</Text>
     </View>
   );
 }
+
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  scrollView: { flex: 1, paddingHorizontal: 24 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' },
+  loadingText: { color: '#9CA3AF', fontSize: 15 },
+
+  // Header
+  profileHeader: { alignItems: 'center', marginTop: 32, marginBottom: 24 },
+  avatarContainer: {
+    width: 96, height: 96, backgroundColor: 'rgba(255,68,68,0.1)', borderRadius: 48,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+  },
+  avatar: { width: 96, height: 96, borderRadius: 48 },
+  userName: { fontSize: 24, fontWeight: '700', color: '#1A237E' },
+  userTitle: { color: '#9CA3AF', marginTop: 4, fontSize: 15 },
+  roleBadgeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  roleBadge: { backgroundColor: 'rgba(255,68,68,0.1)', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
+  roleBadgeText: { color: '#FF4444', fontWeight: '600', fontSize: 13, textTransform: 'capitalize' },
+
+  // Info
+  infoCard: { backgroundColor: '#F9FAFB', borderRadius: 16, padding: 20, marginBottom: 16 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E5E7EB40' },
+  infoLabel: { color: '#9CA3AF', marginLeft: 12, width: 80, fontSize: 14 },
+  infoValue: { color: '#1A237E', fontWeight: '500', flex: 1, textAlign: 'right', fontSize: 14 },
+
+  // Skills
+  skillsSection: { marginBottom: 16 },
+  skillsTitle: { fontSize: 18, fontWeight: '700', color: '#1A237E', marginBottom: 12 },
+  skillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  skillBadge: { backgroundColor: 'rgba(255,68,68,0.1)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  skillText: { color: '#FF4444', fontWeight: '500', fontSize: 13 },
+
+  // Sign Out
+  signOutBtn: {
+    backgroundColor: '#FEF2F2', paddingVertical: 16, borderRadius: 16,
+    alignItems: 'center', marginTop: 16, marginBottom: 40, flexDirection: 'row', justifyContent: 'center', gap: 8,
+  },
+  signOutText: { color: '#EF4444', fontWeight: '700', fontSize: 16 },
+});
