@@ -1,290 +1,165 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Modal, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Alert, Modal, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useBiometrics } from '../hooks/useBiometrics';
 import { Camera, CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../utils/supabase';
-import { Image } from 'expo-image';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { isBiometricSupported, authenticate } = useBiometrics();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [isSignUp, setIsSignUp] = useState(false);
 
-  const openScanner = async () => {
-    const { status } = await Camera.requestCameraPermissionsAsync();
-    setHasPermission(status === 'granted');
-    if (status === 'granted') {
-      setScanned(false);
-      setScanning(true);
-    } else {
-      Alert.alert('Permission Required', 'Camera permission is needed to scan QR codes.');
-    }
-  };
+  useEffect(() => {
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === 'granted');
+    })();
+  }, []);
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please enter email and password.');
-      return;
-    }
     setLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      setLoading(false);
-      if (error) Alert.alert('Error', error.message);
-      else router.replace('/(tabs)');
-    } catch (e: any) {
-      setLoading(false);
-      Alert.alert('Connection Error', 'Unable to connect to the server. Please check your internet connection and try again.');
-    }
-  };
-
-  const handleSignUp = async () => {
-    if (!email.trim() || !password.trim() || !fullName.trim()) {
-      Alert.alert('Error', 'Please fill in all fields.');
-      return;
-    }
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters.');
-      return;
-    }
-    setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: { data: { full_name: fullName.trim() } },
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      Alert.alert('Success', 'Account created! Check your email to verify.', [
-        { text: 'OK', onPress: () => setIsSignUp(false) },
-      ]);
-    }
+    if (error) Alert.alert('Error', error.message);
+    else router.replace('/(tabs)');
   };
 
   const handleBiometricLogin = async () => {
+    // Implement biometric auth logic
     const success = await authenticate();
     if (success) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        router.replace('/(tabs)');
-      } else {
-        Alert.alert('No Session', 'Please sign in with email first, then biometrics will be available for quick access.');
-      }
+      Alert.alert("Success", "Authenticated via Biometrics");
+      router.replace('/(tabs)');
     } else {
-      Alert.alert('Failed', 'Biometric authentication failed.');
+        Alert.alert("Failed", "Biometric authentication failed");
     }
   };
 
-  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+  const handleBarCodeScanned = ({ type, data }: { type: string, data: string }) => {
     setScanned(true);
     setScanning(false);
     Alert.alert('QR Scanned', `Data: ${data}`);
+    // Handle the token from QR code here
   };
 
   return (
-    <KeyboardAvoidingView style={s.flex1} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        style={s.flex1}
-        contentContainerStyle={s.scrollContent}
-        keyboardShouldPersistTaps="handled"
+    <View className="flex-1 bg-white dark:bg-black justify-center px-6">
+      <View className="items-center mb-10 mt-20">
+        <View className="w-20 h-20 bg-primary rounded-2xl items-center justify-center mb-4 shadow-lg shadow-primary/30">
+           <Ionicons name="briefcase" size={40} color="white" />
+        </View>
+        <Text className="text-3xl font-bold text-navy dark:text-white">RedWork</Text>
+        <Text className="text-gray-500 mt-2">Welcome back, professional.</Text>
+      </View>
+
+      <View className="space-y-4">
+        <TextInput
+          className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3 text-base"
+          placeholder="Email"
+          placeholderTextColor="#9CA3AF"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+        />
+        <TextInput
+          className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3 text-base"
+          placeholder="Password"
+          placeholderTextColor="#9CA3AF"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+        <TouchableOpacity className="items-end">
+            <Text className="text-primary font-medium">Forgot Password?</Text>
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity
+        onPress={handleLogin}
+        disabled={loading}
+        className="w-full bg-primary py-4 rounded-xl mt-8 shadow-lg shadow-primary/30 active:scale-95 transition-all"
       >
-        {/* Logo */}
-        <View style={s.logoContainer}>
-          <Image
-            source={require('../assets/images/icon.png')}
-            style={s.logo}
-            contentFit="contain"
-          />
-          <Text style={s.appName}>RedWork</Text>
-          <Text style={s.subtitle}>
-            {isSignUp ? 'Create your account' : 'Welcome back, professional.'}
-          </Text>
-        </View>
+        <Text className="text-white text-center font-bold text-lg">
+          {loading ? 'Logging in...' : 'Sign In'}
+        </Text>
+      </TouchableOpacity>
 
-        {/* Form */}
-        <View style={s.formContainer}>
-          {isSignUp && (
-            <TextInput
-              style={s.input}
-              placeholder="Full Name"
-              placeholderTextColor="#9CA3AF"
-              value={fullName}
-              onChangeText={setFullName}
-              autoCapitalize="words"
-            />
-          )}
-          <TextInput
-            style={s.input}
-            placeholder="Email"
-            placeholderTextColor="#9CA3AF"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            textContentType="emailAddress"
-          />
-          <TextInput
-            style={s.input}
-            placeholder="Password"
-            placeholderTextColor="#9CA3AF"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            textContentType="password"
-          />
-          {!isSignUp && (
-            <TouchableOpacity style={s.forgotRow}>
-              <Text style={s.forgotText}>Forgot Password?</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Main Button */}
-        <TouchableOpacity
-          onPress={isSignUp ? handleSignUp : handleLogin}
-          disabled={loading}
-          style={[s.mainButton, loading && s.buttonDisabled]}
-          activeOpacity={0.85}
+      <View className="flex-row justify-center mt-8 gap-6">
+        <TouchableOpacity 
+          onPress={handleBiometricLogin}
+          className="w-14 h-14 bg-gray-100 dark:bg-gray-800 rounded-full items-center justify-center active:bg-gray-200"
         >
-          <Text style={s.mainButtonText}>
-            {loading ? (isSignUp ? 'Creating...' : 'Signing in...') : (isSignUp ? 'Create Account' : 'Sign In')}
-          </Text>
+          <Ionicons name="finger-print" size={28} color="#EF4444" />
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+            onPress={() => {
+                setScanned(false);
+                setScanning(true);
+            }}
+            className="w-14 h-14 bg-gray-100 dark:bg-gray-800 rounded-full items-center justify-center active:bg-gray-200"
+        >
+            <Ionicons name="qr-code" size={28} color="#EF4444" />
         </TouchableOpacity>
 
-        {/* Social Login */}
-        {!isSignUp && (
-          <View style={s.socialRow}>
-            {isBiometricSupported && (
-              <TouchableOpacity style={s.socialBtn} onPress={handleBiometricLogin}>
-                <Ionicons name="finger-print" size={28} color="#EF4444" />
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={s.socialBtn} onPress={openScanner}>
-              <Ionicons name="qr-code" size={28} color="#EF4444" />
-            </TouchableOpacity>
-            <TouchableOpacity style={s.socialBtn}>
-              <Ionicons name="logo-google" size={24} color="#EF4444" />
-            </TouchableOpacity>
-            <TouchableOpacity style={s.socialBtn}>
-              <Ionicons name="logo-apple" size={24} color="#000" />
-            </TouchableOpacity>
-            <TouchableOpacity style={s.socialBtn}>
-              <Ionicons name="logo-facebook" size={24} color="#1877F2" />
-            </TouchableOpacity>
-          </View>
-        )}
+        <TouchableOpacity className="w-14 h-14 bg-gray-100 dark:bg-gray-800 rounded-full items-center justify-center active:bg-gray-200">
+             <Ionicons name="logo-google" size={24} color="#EF4444" />
+        </TouchableOpacity>
+         <TouchableOpacity className="w-14 h-14 bg-gray-100 dark:bg-gray-800 rounded-full items-center justify-center active:bg-gray-200">
+             <Ionicons name="logo-apple" size={24} color="#EF4444" />
+        </TouchableOpacity>
+      </View>
 
-        {/* Toggle Sign In / Sign Up */}
-        <View style={s.toggleRow}>
-          <Text style={s.toggleText}>
-            {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
-          </Text>
-          <TouchableOpacity onPress={() => { setIsSignUp(!isSignUp); setFullName(''); }}>
-            <Text style={s.toggleLink}>{isSignUp ? 'Sign In' : 'Sign Up'}</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+      <View className="flex-row justify-center mt-10 mb-10">
+        <Text className="text-gray-500">Don't have an account? </Text>
+        <TouchableOpacity>
+            <Text className="text-primary font-bold">Sign Up</Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* QR Scanner Modal */}
       <Modal visible={scanning} animationType="slide" presentationStyle="pageSheet">
-        <View style={s.scannerContainer}>
-          {hasPermission && (
-            <CameraView
-              style={StyleSheet.absoluteFillObject}
-              onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            >
-              <View style={s.scannerOverlay}>
-                <View style={s.scannerFrame} />
-                <Text style={s.scannerLabel}>Scan QR to Login</Text>
-                <TouchableOpacity onPress={() => setScanning(false)} style={s.scannerClose}>
-                  <Ionicons name="close" size={30} color="white" />
-                </TouchableOpacity>
-              </View>
-            </CameraView>
-          )}
+        <View className="flex-1 bg-black">
+            {hasPermission && (
+                <CameraView 
+                    style={StyleSheet.absoluteFillObject}
+                    onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+                    barcodeScannerSettings={{
+                        barcodeTypes: ["qr"],
+                    }}
+                >
+                     <View className="flex-1 items-center justify-center bg-transparent">
+                        <View className="w-64 h-64 border-2 border-white rounded-xl bg-transparent" />
+                        <Text className="text-white mt-10 text-lg font-medium bg-black/50 px-4 py-2 rounded-lg">Scan QR to Login</Text>
+                        
+                        <TouchableOpacity 
+                            onPress={() => setScanning(false)}
+                            className="absolute top-12 right-6 bg-black/50 p-2 rounded-full"
+                        >
+                            <Ionicons name="close" size={30} color="white" />
+                        </TouchableOpacity>
+                    </View>
+                </CameraView>
+            )}
+             {!hasPermission && (
+                <View className="flex-1 bg-black justify-center items-center">
+                    <Text className="text-white">No Camera Permission</Text>
+                     <TouchableOpacity 
+                        onPress={() => setScanning(false)}
+                        className="mt-4 bg-white px-6 py-3 rounded-full"
+                    >
+                        <Text className="font-bold text-black">Close</Text>
+                    </TouchableOpacity>
+                </View>
+             )}
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
-
-const s = StyleSheet.create({
-  flex1: { flex: 1, backgroundColor: '#FFFFFF' },
-  scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 28 },
-
-  // Logo
-  logoContainer: { alignItems: 'center', marginBottom: 40 },
-  logo: { width: 88, height: 88, borderRadius: 22 },
-  appName: { fontSize: 32, fontWeight: '800', color: '#1A237E', marginTop: 16, letterSpacing: -0.5 },
-  subtitle: { color: '#9CA3AF', marginTop: 6, fontSize: 15 },
-
-  // Form
-  formContainer: { gap: 14 },
-  input: {
-    width: '100%',
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    fontSize: 16,
-    color: '#1A237E',
-  },
-  forgotRow: { alignItems: 'flex-end' },
-  forgotText: { color: '#FF4444', fontWeight: '600', fontSize: 13 },
-
-  // Main Button
-  mainButton: {
-    width: '100%',
-    backgroundColor: '#FF4444',
-    paddingVertical: 18,
-    borderRadius: 14,
-    marginTop: 24,
-    shadowColor: '#FF4444',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  buttonDisabled: { opacity: 0.6 },
-  mainButtonText: { color: '#FFFFFF', textAlign: 'center', fontWeight: '700', fontSize: 17 },
-
-  // Social
-  socialRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 32, gap: 14 },
-  socialBtn: {
-    width: 56,
-    height: 56,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Toggle
-  toggleRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 32, marginBottom: 40 },
-  toggleText: { color: '#9CA3AF', fontSize: 14 },
-  toggleLink: { color: '#FF4444', fontWeight: '700', fontSize: 14 },
-
-  // Scanner
-  scannerContainer: { flex: 1, backgroundColor: '#000' },
-  scannerOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scannerFrame: { width: 256, height: 256, borderWidth: 2, borderColor: '#FFF', borderRadius: 16 },
-  scannerLabel: {
-    color: '#FFF', marginTop: 40, fontSize: 18, fontWeight: '500',
-    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8,
-  },
-  scannerClose: { position: 'absolute', top: 48, right: 24, backgroundColor: 'rgba(0,0,0,0.5)', padding: 8, borderRadius: 20 },
-});

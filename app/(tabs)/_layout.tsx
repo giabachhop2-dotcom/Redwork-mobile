@@ -3,6 +3,8 @@ import React from 'react';
 import { Platform } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -12,63 +14,49 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#FF4444',
+        tabBarActiveTintColor: '#FF4444', // RedWork Primary
         tabBarInactiveTintColor: '#9CA3AF',
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: Platform.select({
           ios: {
             position: 'absolute',
-            backgroundColor: colorScheme === 'dark' ? 'rgba(0,0,0,0.9)' : 'rgba(255,255,255,0.95)',
+            backgroundColor: colorScheme === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)',
             borderTopWidth: 0,
             elevation: 0,
             height: 85,
             paddingBottom: 25,
           },
-          default: {
-            height: 60,
-            paddingBottom: 8,
-          },
+          default: {},
         }),
       }}>
       <Tabs.Screen
         name="index"
         options={{
           title: 'Jobs',
-          tabBarIcon: ({ color }) => <Ionicons name="briefcase" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="briefcase" size={26} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="network"
+        name="messages"
         options={{
-          title: 'Mạng lưới',
-          tabBarIcon: ({ color }) => <Ionicons name="globe" size={24} color={color} />,
+          title: 'Messages',
+          tabBarIcon: ({ color }) => <Ionicons name="chatbubbles" size={26} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="posts"
-        options={{
-          title: 'Bài đăng',
-          tabBarIcon: ({ color }) => <Ionicons name="newspaper" size={24} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="notifications"
-        options={{
-          title: 'Thông báo',
-          tabBarIcon: ({ color }) => <Ionicons name="notifications" size={24} color={color} />,
-        }}
-      />
-      <Tabs.Screen
+       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="person" size={26} color={color} />,
         }}
       />
-      {/* Hide old tabs from navigation */}
-      <Tabs.Screen name="explore" options={{ href: null }} />
-      <Tabs.Screen name="messages" options={{ href: null }} />
+      <Tabs.Screen
+        name="explore"
+        options={{
+          href: null, // Hidden for now
+        }}
+      />
     </Tabs>
   );
 }

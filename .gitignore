@@ -31,13 +31,7 @@ yarn-error.*
 *.pem
 
 # local env files
-.env
 .env*.local
-
-# secrets
-credentials.json
-deploy_key
-deploy_key.pub
 
 # typescript
 *.tsbuildinfo
@@ -47,3 +41,8 @@ app-example
 # generated native folders
 /ios
 /android
+
+deploy_key
+deploy_key.pub
+.env
+credentials.json
