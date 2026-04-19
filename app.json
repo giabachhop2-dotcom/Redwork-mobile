@@ -56,11 +56,11 @@
         "expo-build-properties",
         {
           "ios": {
-            "useFrameworks": "static",
-            "forceStaticLinking": ["RNFBApp", "RNFBMessaging"]
+            "useFrameworks": "static"
           }
         }
-      ]
+      ],
+      "./plugins/withFirebaseModularHeaderFix"
     ],
     "experiments": {
       "typedRoutes": true,
