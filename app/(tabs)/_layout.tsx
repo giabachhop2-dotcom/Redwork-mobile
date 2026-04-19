@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -38,9 +38,21 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="create"
+        options={{
+          title: 'Tạo Job',
+          tabBarIcon: ({ color }) => (
+            <View style={{ backgroundColor: '#EF4444', width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginTop: -10, shadowColor: '#EF4444', shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } }}>
+              <Ionicons name="add" size={32} color="white" />
+            </View>
+          ),
+          tabBarLabel: () => null,
+        }}
+      />
+      <Tabs.Screen
         name="messages"
         options={{
-          title: 'Messages',
+          title: 'Chat',
           tabBarIcon: ({ color }) => <Ionicons name="chatbubbles" size={26} color={color} />,
         }}
       />

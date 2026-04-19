@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { Job } from '../types/database';
+import { Job } from '../../types/database';
 
 interface JobCardProps {
   job: Job;
