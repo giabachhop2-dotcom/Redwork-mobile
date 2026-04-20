@@ -3,20 +3,16 @@ const fs = require("fs");
 const path = require("path");
 
 /**
- * Expo Config Plugin: Fix Firebase "non-modular header" build errors on iOS.
+ * Expo Config Plugin: Fix Firebase iOS build errors.
  *
- * ROOT CAUSE: @react-native-firebase/app imports React Native headers via
- * angle brackets (#import <React/RCTConvert.h>). When useFrameworks:"static"
- * is enabled, CocoaPods treats RNFB as a framework module, and Xcode 16's
- * ExplicitPrecompiledModules scans module maps BEFORE compiler flags take
- * effect. This means OTHER_CFLAGS like -Wno-error cannot suppress the error.
+ * Fixes:
+ *   1. "non-modular header" errors (Xcode 16 + useFrameworks:"static")
+ *   2. nanopb "no such file or directory: '[,'" (OTHER_CFLAGS array parse bug)
  *
- * SOLUTION (3-layer):
- *   1. Patch node_modules source files: Replace #import <React/X.h> with
- *      #import "X.h" so Clang never treats React as a framework import.
- *   2. Disable EXPLICIT_MODULES on the Xcode project to prevent the
- *      PrecompileModule .scan phase from running.
- *   3. Inject Podfile post_install settings as a safety net.
+ * SOLUTIONS:
+ *   Layer 1: Patch node_modules React imports in RNFB source.
+ *   Layer 2: Disable EXPLICIT_MODULES on main .xcodeproj.
+ *   Layer 3: Podfile post_install — fix EXPLICIT_MODULES + nanopb OTHER_CFLAGS.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -84,7 +80,7 @@ function withFirebaseModularHeaderFix(config) {
     return config;
   });
 
-  // ── Step 3: Inject into Podfile post_install (safety net) ──────────────
+  // ── Step 3: Inject into Podfile post_install (safety net + nanopb fix) ─
   config = withDangerousMod(config, [
     "ios",
     async (config) => {
@@ -100,14 +96,17 @@ function withFirebaseModularHeaderFix(config) {
 
       let podfile = fs.readFileSync(podfilePath, "utf8");
 
-      if (podfile.includes("[RNFB-ModularHeaderFix]")) {
-        console.log("[RNFB-Fix] Podfile already patched, skipping.");
+      if (podfile.includes("[RNFB-ModularHeaderFix-v2]")) {
+        console.log("[RNFB-Fix] Podfile already patched (v2), skipping.");
         return config;
       }
 
+      // Remove old v1 marker if present
+      podfile = podfile.replace(/# \[RNFB-ModularHeaderFix\][^\n]*\n/g, "");
+
       const rubySnippet = [
         "",
-        "    # [RNFB-ModularHeaderFix] Fix non-modular header errors for Firebase",
+        "    # [RNFB-ModularHeaderFix-v2] Fix non-modular header + nanopb OTHER_CFLAGS errors",
         "    installer.pods_project.build_configurations.each do |bc|",
         "      bc.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'",
         "      bc.build_settings['EXPLICIT_MODULES'] = 'NO'",
@@ -116,9 +115,25 @@ function withFirebaseModularHeaderFix(config) {
         "      target.build_configurations.each do |bc|",
         "        bc.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'",
         "        bc.build_settings['EXPLICIT_MODULES'] = 'NO'",
-        "        flags = bc.build_settings['OTHER_CFLAGS'] || '$(inherited)'",
-        "        unless flags.include?('-Wno-non-modular-include-in-framework-module')",
-        "          bc.build_settings['OTHER_CFLAGS'] = \"#{flags} -Wno-error=non-modular-include-in-framework-module -Wno-non-modular-include-in-framework-module\"",
+        "",
+        "        # Fix nanopb 'no such file or directory: [,' error.",
+        "        # When OTHER_CFLAGS is an Array, Xcode 16 can misparse the brackets.",
+        "        # We normalize it to a plain space-separated string.",
+        "        flags = bc.build_settings['OTHER_CFLAGS']",
+        "        if flags.is_a?(Array)",
+        "          bc.build_settings['OTHER_CFLAGS'] = flags.join(' ')",
+        "        end",
+        "",
+        "        # Also normalize OTHER_LDFLAGS for safety",
+        "        ldflags = bc.build_settings['OTHER_LDFLAGS']",
+        "        if ldflags.is_a?(Array)",
+        "          bc.build_settings['OTHER_LDFLAGS'] = ldflags.join(' ')",
+        "        end",
+        "",
+        "        # Suppress non-modular header warnings",
+        "        cflags = bc.build_settings['OTHER_CFLAGS'] || '$(inherited)'",
+        "        unless cflags.include?('-Wno-non-modular-include-in-framework-module')",
+        "          bc.build_settings['OTHER_CFLAGS'] = \"#{cflags} -Wno-error=non-modular-include-in-framework-module -Wno-non-modular-include-in-framework-module\"",
         "        end",
         "      end",
         "    end",
