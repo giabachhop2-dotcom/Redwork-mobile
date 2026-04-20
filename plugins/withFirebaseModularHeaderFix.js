@@ -111,17 +111,17 @@ function withFirebaseModularHeaderFix(config) {
 
       let podfile = fs.readFileSync(podfilePath, "utf8");
 
-      if (podfile.includes("[RNFB-ModularHeaderFix-v3]")) {
-        console.log("[RNFB-Fix] Podfile already patched (v3), skipping.");
+      if (podfile.includes("[RNFB-ModularHeaderFix-v4]")) {
+        console.log("[RNFB-Fix] Podfile already patched (v4), skipping.");
         return config;
       }
 
-      // Remove old v1 marker if present
-      podfile = podfile.replace(/# \[RNFB-ModularHeaderFix\][^\n]*\n/g, "");
+      // Remove old v1/v2/v3 markers if present
+      podfile = podfile.replace(/# \[RNFB-ModularHeaderFix.*\][^\n]*\n/g, "");
 
       const rubySnippet = [
         "",
-        "    # [RNFB-ModularHeaderFix-v3] Fix non-modular header + nanopb OTHER_CFLAGS errors",
+        "    # [RNFB-ModularHeaderFix-v4] Fix non-modular header errors",
         "    installer.pods_project.build_configurations.each do |bc|",
         "      bc.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'",
         "      bc.build_settings['EXPLICIT_MODULES'] = 'NO'",
@@ -135,21 +135,6 @@ function withFirebaseModularHeaderFix(config) {
         "      target.build_configurations.each do |bc|",
         "        bc.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'",
         "        bc.build_settings['EXPLICIT_MODULES'] = 'NO'",
-        "",
-        "        # Fix nanopb 'no such file or directory: [,' error.",
-        "        # Safely handle OTHER_CFLAGS and OTHER_CPLUSPLUSFLAGS by forcing Array to String",
-        "        ['OTHER_CFLAGS', 'OTHER_CPLUSPLUSFLAGS'].each do |flag_key|",
-        "          cflags = bc.build_settings[flag_key] || '$(inherited)'",
-        "          if cflags.is_a?(Array)",
-        "            cflags = cflags.join(' ')",
-        "          end",
-        "          if cflags.is_a?(String)",
-        "            unless cflags.include?('-Wno-non-modular-include-in-framework-module')",
-        "              cflags = cflags + ' -Wno-error=non-modular-include-in-framework-module -Wno-non-modular-include-in-framework-module'",
-        "            end",
-        "          end",
-        "          bc.build_settings[flag_key] = cflags",
-        "        end",
         "      end",
         "    end",
         "",
