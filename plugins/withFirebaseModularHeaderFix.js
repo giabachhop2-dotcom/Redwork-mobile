@@ -66,18 +66,7 @@ function withFirebaseModularHeaderFix(config) {
 
       let injected = false;
 
-      // Strategy 1: Inject AFTER react_native_post_install (so our settings win)
-      const rnPostInstallRegex =
-        /react_native_post_install\s*\(\s*installer[^)]*\)/;
-      if (rnPostInstallRegex.test(podfile)) {
-        podfile = podfile.replace(rnPostInstallRegex, (match) => {
-          return match + rubySnippet;
-        });
-        injected = true;
-        console.log(
-          "[RNFB-Fix] Injected AFTER react_native_post_install ✓"
-        );
-      }
+
 
       // Strategy 2: Inject at start of post_install
       if (!injected && podfile.includes("post_install do |installer|")) {
