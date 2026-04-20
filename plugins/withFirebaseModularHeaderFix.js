@@ -145,7 +145,7 @@ function withFirebaseModularHeaderFix(config) {
         "          end",
         "          if cflags.is_a?(String)",
         "            unless cflags.include?('-Wno-non-modular-include-in-framework-module')",
-        "              cflags << ' -Wno-error=non-modular-include-in-framework-module -Wno-non-modular-include-in-framework-module'",
+        "              cflags = cflags + ' -Wno-error=non-modular-include-in-framework-module -Wno-non-modular-include-in-framework-module'",
         "            end",
         "          end",
         "          bc.build_settings[flag_key] = cflags",
@@ -153,7 +153,7 @@ function withFirebaseModularHeaderFix(config) {
         "      end",
         "    end",
         "",
-      ].join("\\n");
+      ].join("\n");
 
       const lines = podfile.split("\n");
       const postInstallIdx = lines.findIndex((l) =>
