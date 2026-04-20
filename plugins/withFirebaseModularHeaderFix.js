@@ -63,7 +63,7 @@ function withFirebaseModularHeaderFix(config) {
     },
   ]);
 
-  // ── Step 2: Disable EXPLICIT_MODULES on the main App .xcodeproj ────────
+  // ── Step 2: Disable EXPLICIT_MODULES & Fix Script Phases ───────────────
   config = withXcodeProject(config, (config) => {
     const xcodeProject = config.modResults;
     const buildConfigs = xcodeProject.pbxXCBuildConfigurationSection();
@@ -77,6 +77,21 @@ function withFirebaseModularHeaderFix(config) {
       }
     }
     console.log(`[RNFB-Fix] Step 2: Set EXPLICIT_MODULES=NO on ${count} build configurations.`);
+
+    // Suppress "Based on dependency analysis" warnings for scripts in Xcode 16
+    const scriptPhases = xcodeProject.hash?.project?.objects?.PBXShellScriptBuildPhase;
+    if (scriptPhases) {
+      let phaseCount = 0;
+      for (const key in scriptPhases) {
+        const phase = scriptPhases[key];
+        if (phase && typeof phase === "object" && phase.isa === "PBXShellScriptBuildPhase") {
+          phase.alwaysOutOfDate = "1";
+          phaseCount++;
+        }
+      }
+      console.log(`[RNFB-Fix] Step 2.1: Set alwaysOutOfDate=1 on ${phaseCount} script phases.`);
+    }
+
     return config;
   });
 
@@ -112,6 +127,11 @@ function withFirebaseModularHeaderFix(config) {
         "      bc.build_settings['EXPLICIT_MODULES'] = 'NO'",
         "    end",
         "    installer.pods_project.targets.each do |target|",
+        "      target.build_phases.each do |phase|",
+        "        if phase.respond_to?(:always_out_of_date=)",
+        "          phase.always_out_of_date = '1'",
+        "        end",
+        "      end",
         "      target.build_configurations.each do |bc|",
         "        bc.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'",
         "        bc.build_settings['EXPLICIT_MODULES'] = 'NO'",
@@ -119,14 +139,19 @@ function withFirebaseModularHeaderFix(config) {
         "        # Fix nanopb 'no such file or directory: [,' error.",
         "        # Safely handle OTHER_CFLAGS whether it's an Array or String",
         "        cflags = bc.build_settings['OTHER_CFLAGS'] || ['$(inherited)']",
-        "        cflags = [cflags] unless cflags.is_a?(Array)",
-        "        ",
-        "        has_flag = cflags.any? { |f| f.to_s.include?('-Wno-non-modular-include-in-framework-module') }",
-        "        unless has_flag",
-        "          cflags << '-Wno-error=non-modular-include-in-framework-module'",
-        "          cflags << '-Wno-non-modular-include-in-framework-module'",
+        "        if cflags.is_a?(String)",
+        "          unless cflags.include?('-Wno-non-modular-include-in-framework-module')",
+        "            cflags << ' -Wno-error=non-modular-include-in-framework-module -Wno-non-modular-include-in-framework-module'",
+        "          end",
+        "          bc.build_settings['OTHER_CFLAGS'] = cflags",
+        "        elsif cflags.is_a?(Array)",
+        "          has_flag = cflags.any? { |f| f.to_s.include?('-Wno-non-modular-include-in-framework-module') }",
+        "          unless has_flag",
+        "            cflags << '-Wno-error=non-modular-include-in-framework-module'",
+        "            cflags << '-Wno-non-modular-include-in-framework-module'",
+        "          end",
+        "          bc.build_settings['OTHER_CFLAGS'] = cflags",
         "        end",
-        "        bc.build_settings['OTHER_CFLAGS'] = cflags",
         "      end",
         "    end",
         "",
