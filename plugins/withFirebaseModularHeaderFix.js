@@ -5,31 +5,87 @@ const path = require("path");
 /**
  * Expo Config Plugin: Fix Firebase "non-modular header" build errors on iOS.
  *
- * Problem: @react-native-firebase/app imports React Native headers
- * (RCTBridgeModule.h, RCTConvert.h, etc.) which are NOT modular.
- * When useFrameworks:"static" is enabled, CocoaPods treats RNFB as a
- * framework module, triggering -Wnon-modular-include-in-framework-module.
+ * ROOT CAUSE: @react-native-firebase/app imports React Native headers via
+ * angle brackets (#import <React/RCTConvert.h>). When useFrameworks:"static"
+ * is enabled, CocoaPods treats RNFB as a framework module, and Xcode 16's
+ * ExplicitPrecompiledModules scans module maps BEFORE compiler flags take
+ * effect. This means OTHER_CFLAGS like -Wno-error cannot suppress the error.
  *
- * With Xcode 16's ExplicitPrecompiledModules, the old approach of just
- * setting CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES on
- * specific targets is not enough. We must also explicitly disable EXPLICIT_MODULES
- * on both the Pods project and the main Workspace project.
+ * SOLUTION (3-layer):
+ *   1. Patch node_modules source files: Replace #import <React/X.h> with
+ *      #import "X.h" so Clang never treats React as a framework import.
+ *   2. Disable EXPLICIT_MODULES on the Xcode project to prevent the
+ *      PrecompileModule .scan phase from running.
+ *   3. Inject Podfile post_install settings as a safety net.
  */
-function withFirebaseModularHeaderFix(config) {
-  // Step 1: Disable EXPLICIT_MODULES on the main App project
-  config = withXcodeProject(config, (config) => {
-    const xcodeProject = config.modResults;
-    const buildConfigurations = xcodeProject.pbxXCBuildConfigurationSection();
-    for (const key in buildConfigurations) {
-      if (buildConfigurations[key].buildSettings) {
-        buildConfigurations[key].buildSettings.EXPLICIT_MODULES = '"NO"';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: recursively patch all .h/.m/.mm files in a directory
+// ─────────────────────────────────────────────────────────────────────────────
+function patchReactImportsInDir(dir) {
+  if (!fs.existsSync(dir)) return 0;
+  let patchedCount = 0;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      patchedCount += patchReactImportsInDir(fullPath);
+    } else if (/\.(h|m|mm)$/.test(entry.name)) {
+      let content = fs.readFileSync(fullPath, "utf8");
+      // Replace #import <React/Xxx.h> → #import "Xxx.h"
+      const patched = content.replace(/#import\s+<React\/([^>]+)>/g, '#import "$1"');
+      if (patched !== content) {
+        fs.writeFileSync(fullPath, patched, "utf8");
+        patchedCount++;
+        console.log("[RNFB-Fix] Patched: " + fullPath);
       }
     }
+  }
+  return patchedCount;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main plugin
+// ─────────────────────────────────────────────────────────────────────────────
+function withFirebaseModularHeaderFix(config) {
+  // ── Step 1: Patch node_modules FIRST (most important) ──────────────────
+  config = withDangerousMod(config, [
+    "ios",
+    async (config) => {
+      const projectRoot = config.modRequest.projectRoot;
+      const firebaseDirs = [
+        path.join(projectRoot, "node_modules", "@react-native-firebase", "app", "ios"),
+        path.join(projectRoot, "node_modules", "@react-native-firebase", "messaging", "ios"),
+      ];
+
+      let total = 0;
+      for (const dir of firebaseDirs) {
+        total += patchReactImportsInDir(dir);
+      }
+      console.log(`[RNFB-Fix] Step 1: Patched ${total} source file(s) in node_modules.`);
+      return config;
+    },
+  ]);
+
+  // ── Step 2: Disable EXPLICIT_MODULES on the main App .xcodeproj ────────
+  config = withXcodeProject(config, (config) => {
+    const xcodeProject = config.modResults;
+    const buildConfigs = xcodeProject.pbxXCBuildConfigurationSection();
+    let count = 0;
+    for (const key in buildConfigs) {
+      const bc = buildConfigs[key];
+      if (bc && typeof bc === "object" && bc.buildSettings) {
+        bc.buildSettings.CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = "YES";
+        bc.buildSettings.EXPLICIT_MODULES = "NO";
+        count++;
+      }
+    }
+    console.log(`[RNFB-Fix] Step 2: Set EXPLICIT_MODULES=NO on ${count} build configurations.`);
     return config;
   });
 
-  // Step 2: Inject into Podfile to configure Pods
-  return withDangerousMod(config, [
+  // ── Step 3: Inject into Podfile post_install (safety net) ──────────────
+  config = withDangerousMod(config, [
     "ios",
     async (config) => {
       const podfilePath = path.join(
@@ -38,18 +94,19 @@ function withFirebaseModularHeaderFix(config) {
       );
 
       if (!fs.existsSync(podfilePath)) {
-        console.warn("[RNFB-Fix] Podfile not found at " + podfilePath + ", skipping.");
+        console.warn("[RNFB-Fix] Podfile not found, skipping Step 3.");
         return config;
       }
 
       let podfile = fs.readFileSync(podfilePath, "utf8");
 
       if (podfile.includes("[RNFB-ModularHeaderFix]")) {
-        console.log("[RNFB-Fix] Already patched, skipping.");
+        console.log("[RNFB-Fix] Podfile already patched, skipping.");
         return config;
       }
 
       const rubySnippet = [
+        "",
         "    # [RNFB-ModularHeaderFix] Fix non-modular header errors for Firebase",
         "    installer.pods_project.build_configurations.each do |bc|",
         "      bc.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'",
@@ -59,104 +116,42 @@ function withFirebaseModularHeaderFix(config) {
         "      target.build_configurations.each do |bc|",
         "        bc.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'",
         "        bc.build_settings['EXPLICIT_MODULES'] = 'NO'",
-        "        ['OTHER_CFLAGS', 'OTHER_CPLUSPLUSFLAGS'].each do |flag_key|",
-        "          flags = bc.build_settings[flag_key] || '$(inherited)'",
-        "          unless flags.include?('-Wno-error=non-modular-include-in-framework-module')",
-        "            bc.build_settings[flag_key] = \"#{flags} -Wno-error=non-modular-include-in-framework-module -Wno-non-modular-include-in-framework-module\"",
-        "          end",
+        "        flags = bc.build_settings['OTHER_CFLAGS'] || '$(inherited)'",
+        "        unless flags.include?('-Wno-non-modular-include-in-framework-module')",
+        "          bc.build_settings['OTHER_CFLAGS'] = \"#{flags} -Wno-error=non-modular-include-in-framework-module -Wno-non-modular-include-in-framework-module\"",
         "        end",
         "      end",
         "    end",
+        "",
       ].join("\n");
 
       const lines = podfile.split("\n");
-      const postInstallStartIndex = lines.findIndex(l => l.match(/^\s*post_install\s+do\s+\|installer\|/));
+      const postInstallIdx = lines.findIndex((l) =>
+        /^\s*post_install\s+do\s+\|installer\|/.test(l)
+      );
 
       let injected = false;
 
-      if (postInstallStartIndex > -1) {
-        // Find indentation of the post_install block
-        const indentMatch = lines[postInstallStartIndex].match(/^(\s*)/);
-        const indentation = indentMatch ? indentMatch[1] : "";
-        
-        let insertIndex = -1;
-        // Find the matching 'end' with the exact same indentation
-        for (let i = postInstallStartIndex + 1; i < lines.length; i++) {
-          if (lines[i] === indentation + "end") {
-            insertIndex = i;
+      if (postInstallIdx > -1) {
+        const indent = (lines[postInstallIdx].match(/^(\s*)/) || ["", ""])[1];
+        // Find matching 'end'
+        for (let i = postInstallIdx + 1; i < lines.length; i++) {
+          if (lines[i].trimEnd() === indent + "end") {
+            lines.splice(i, 0, rubySnippet);
+            podfile = lines.join("\n");
+            injected = true;
+            console.log("[RNFB-Fix] Step 3: Injected before 'end' of post_install.");
             break;
           }
-        }
-        
-        if (insertIndex > -1) {
-          lines.splice(insertIndex, 0, rubySnippet);
-          podfile = lines.join("\n");
-          injected = true;
-          console.log("[RNFB-Fix] Injected successfully at the END of post_install block.");
         }
       }
 
       if (!injected) {
-        // Fallback: append an override to the very end of the file
         podfile += "\npost_install do |installer|\n" + rubySnippet + "\nend\n";
-        console.log("[RNFB-Fix] Appended new post_install block as fallback.");
+        console.log("[RNFB-Fix] Step 3: Appended new post_install block.");
       }
 
       fs.writeFileSync(podfilePath, podfile, "utf8");
-      console.log("[RNFB-Fix] Podfile patched successfully.");
-
-      return config;
-    },
-  ]);
-
-  // Step 3: Patch node_modules directly to remove <React/...> angle brackets (Ultimate Fail-Safe)
-  config = withDangerousMod(config, [
-    "ios",
-    async (config) => {
-      const rnfbAppIosDir = path.join(
-        config.modRequest.projectRoot,
-        "node_modules",
-        "@react-native-firebase",
-        "app",
-        "ios",
-        "RNFBApp"
-      );
-
-      if (!fs.existsSync(rnfbAppIosDir)) {
-        return config;
-      }
-
-      function replaceReactImports(dir) {
-        const files = fs.readdirSync(dir);
-        for (const file of files) {
-          const fullPath = path.join(dir, file);
-          if (fs.statSync(fullPath).isDirectory()) {
-            replaceReactImports(fullPath);
-          } else if (fullPath.endsWith(".h") || fullPath.endsWith(".m") || fullPath.endsWith(".mm")) {
-            let content = fs.readFileSync(fullPath, "utf8");
-            let modified = false;
-
-            // Replace `#import <React/SomeHeader.h>` with `#import "SomeHeader.h"`
-            const regex = /#import\s+<React\/([^>]+)>/g;
-            if (regex.test(content)) {
-              content = content.replace(regex, '#import "$1"');
-              modified = true;
-            }
-
-            if (modified) {
-              fs.writeFileSync(fullPath, content, "utf8");
-              console.log("[RNFB-Fix] Patched React imports in: " + file);
-            }
-          }
-        }
-      }
-
-      try {
-        replaceReactImports(rnfbAppIosDir);
-      } catch (e) {
-        console.warn("[RNFB-Fix] Failed to patch node_modules: ", e);
-      }
-
       return config;
     },
   ]);
