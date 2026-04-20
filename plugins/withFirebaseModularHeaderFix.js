@@ -111,8 +111,8 @@ function withFirebaseModularHeaderFix(config) {
 
       let podfile = fs.readFileSync(podfilePath, "utf8");
 
-      if (podfile.includes("[RNFB-ModularHeaderFix-v2]")) {
-        console.log("[RNFB-Fix] Podfile already patched (v2), skipping.");
+      if (podfile.includes("[RNFB-ModularHeaderFix-v3]")) {
+        console.log("[RNFB-Fix] Podfile already patched (v3), skipping.");
         return config;
       }
 
@@ -121,7 +121,7 @@ function withFirebaseModularHeaderFix(config) {
 
       const rubySnippet = [
         "",
-        "    # [RNFB-ModularHeaderFix-v2] Fix non-modular header + nanopb OTHER_CFLAGS errors",
+        "    # [RNFB-ModularHeaderFix-v3] Fix non-modular header + nanopb OTHER_CFLAGS errors",
         "    installer.pods_project.build_configurations.each do |bc|",
         "      bc.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'",
         "      bc.build_settings['EXPLICIT_MODULES'] = 'NO'",
@@ -137,25 +137,23 @@ function withFirebaseModularHeaderFix(config) {
         "        bc.build_settings['EXPLICIT_MODULES'] = 'NO'",
         "",
         "        # Fix nanopb 'no such file or directory: [,' error.",
-        "        # Safely handle OTHER_CFLAGS whether it's an Array or String",
-        "        cflags = bc.build_settings['OTHER_CFLAGS'] || ['$(inherited)']",
-        "        if cflags.is_a?(String)",
-        "          unless cflags.include?('-Wno-non-modular-include-in-framework-module')",
-        "            cflags << ' -Wno-error=non-modular-include-in-framework-module -Wno-non-modular-include-in-framework-module'",
+        "        # Safely handle OTHER_CFLAGS and OTHER_CPLUSPLUSFLAGS by forcing Array to String",
+        "        ['OTHER_CFLAGS', 'OTHER_CPLUSPLUSFLAGS'].each do |flag_key|",
+        "          cflags = bc.build_settings[flag_key] || '$(inherited)'",
+        "          if cflags.is_a?(Array)",
+        "            cflags = cflags.join(' ')",
         "          end",
-        "          bc.build_settings['OTHER_CFLAGS'] = cflags",
-        "        elsif cflags.is_a?(Array)",
-        "          has_flag = cflags.any? { |f| f.to_s.include?('-Wno-non-modular-include-in-framework-module') }",
-        "          unless has_flag",
-        "            cflags << '-Wno-error=non-modular-include-in-framework-module'",
-        "            cflags << '-Wno-non-modular-include-in-framework-module'",
+        "          if cflags.is_a?(String)",
+        "            unless cflags.include?('-Wno-non-modular-include-in-framework-module')",
+        "              cflags << ' -Wno-error=non-modular-include-in-framework-module -Wno-non-modular-include-in-framework-module'",
+        "            end",
         "          end",
-        "          bc.build_settings['OTHER_CFLAGS'] = cflags",
+        "          bc.build_settings[flag_key] = cflags",
         "        end",
         "      end",
         "    end",
         "",
-      ].join("\n");
+      ].join("\\n");
 
       const lines = podfile.split("\n");
       const postInstallIdx = lines.findIndex((l) =>
